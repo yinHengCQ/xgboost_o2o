@@ -29,6 +29,7 @@ def _generrate_key(user_id,merchant_id):
     return "{}_{}".format(user_id,merchant_id)
 
 
+
 def generate_user_json():
     off_train = pd.read_csv('../data/ccf_offline_stage1_train.csv', dtype=str)
     off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
@@ -61,12 +62,47 @@ def generate_user_merchant_relation_json():
         json.dump(user_merchant_relation_dict, f, ensure_ascii=False)
 
 
+def generate_merchant_relation_json():
+    # off_train = pd.read_csv('../data/ccf_offline_stage1_train.csv', dtype=str)
+    # off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
+    # use_data = off_train[pd.notna(off_train.date)]
+    #
+    # merchant_relation_dict = dict()
+    # for i in use_data.values:
+    #     if i[1] not in merchant_relation_dict:
+    #         merchant_relation_dict[i[1]]=set()
+    #     merchant_relation_dict[i[1]].add(i[0])
+    #
+    # for k,v in merchant_relation_dict.items():
+    #     merchant_relation_dict[k]=len(v)
+    #
+    # with open("./feature_data/merchant_relation_dict.json", "w", encoding="utf-8") as f:
+    #     json.dump(merchant_relation_dict, f, ensure_ascii=False)
+
+    with open("./feature_data/merchant_relation_dict.json", "r", encoding="utf-8") as f:
+        merchant_relation_dict=json.load(f)
+
+
+    temp=sorted(merchant_relation_dict.items(),key=lambda x:x[1])
+    out=dict()
+    for index,v in enumerate(temp):
+        out[v[0]]=index+1
+
+    with open("./feature_data/merchant_relation_dict.json", "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False)
+
+
+
+
 def build_train_data():
     with open("./feature_data/user_action_dict.json", "r", encoding="utf-8") as f:
         user_action_dict=json.load(f)
 
     with open("./feature_data/user_merchant_relation_dict.json", "r", encoding="utf-8") as f:
         user_merchant_relation_dict=json.load(f)
+
+    with open("./feature_data/merchant_relation_dict.json", "r", encoding="utf-8") as f:
+        merchant_relation_dict=json.load(f)
 
     def _cala_day(day1,day2):
         return (date(int(day1[:4]), int(day1[4:6]), int(day1[6:]))-date(int(day2[:4]), int(day2[4:6]), int(day2[6:]))).days
@@ -93,6 +129,12 @@ def build_train_data():
         else:
             return user_merchant_relation_dict[use_data_k]
 
+    def _evaluate_merchant_relation(merchant_id):
+        if merchant_id in merchant_relation_dict:
+            return merchant_relation_dict[merchant_id]
+        else:
+            return 0
+
     if os.path.exists("./feature_data/label_data.csv"):
         label_data= pd.read_csv('./feature_data/label_data.csv', dtype=str)
         label_data.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received','date','use_data_k','label']
@@ -100,6 +142,7 @@ def build_train_data():
         label_data["_is_man"] = label_data.apply(lambda row: _is_man(row['discount_rate']),axis=1)
         label_data["weekday"]=label_data.apply(lambda row: _calc_weekday(row['date_received']),axis=1)
         label_data['user_merchant_relation']=label_data.apply(lambda row: _evaluate_user_merchant_relation(row['use_data_k']),axis=1)
+        label_data['merchant_relation'] = label_data.apply(lambda row: _evaluate_merchant_relation(row['merchant_id']),axis=1)
         label_data.drop("date",axis=1,inplace=True)
         label_data.to_csv("./feature_data/train_data.csv",index=None)
     else:
@@ -115,6 +158,7 @@ def build_train_data():
             label_data["_is_man"] = label_data.apply(lambda row: _is_man(row['discount_rate']), axis=1)
             label_data["weekday"] = label_data.apply(lambda row: _calc_weekday(row['date_received']), axis=1)
             label_data['user_merchant_relation'] = label_data.apply(lambda row: _evaluate_user_merchant_relation(row['use_data_k']), axis=1)
+            label_data['merchant_relation'] = label_data.apply(lambda row: _evaluate_merchant_relation(row['merchant_id']), axis=1)
             label_data.drop("date", axis=1, inplace=True)
             label_data.to_csv("./feature_data/train_data.csv", index=None)
         else:
@@ -135,6 +179,7 @@ def build_train_data():
             label_data["_is_man"] = label_data.apply(lambda row: _is_man(row['discount_rate']), axis=1)
             label_data["weekday"] = label_data.apply(lambda row: _calc_weekday(row['date_received']), axis=1)
             label_data['user_merchant_relation'] = label_data.apply(lambda row: _evaluate_user_merchant_relation(row['use_data_k']), axis=1)
+            label_data['merchant_relation'] = label_data.apply(lambda row: _evaluate_merchant_relation(row['merchant_id']), axis=1)
             label_data.drop("date", axis=1, inplace=True)
             label_data.to_csv("./feature_data/train_data.csv", index=None)
 
@@ -143,11 +188,20 @@ def build_test_data():
     with open("./feature_data/user_merchant_relation_dict.json", "r", encoding="utf-8") as f:
         user_merchant_relation_dict=json.load(f)
 
+    with open("./feature_data/merchant_relation_dict.json", "r", encoding="utf-8") as f:
+        merchant_relation_dict=json.load(f)
+
     def _evaluate_user_merchant_relation(use_data_k):
         if use_data_k not in user_merchant_relation_dict:
             return 0
         else:
             return user_merchant_relation_dict[use_data_k]
+
+    def _evaluate_merchant_relation(merchant_id):
+        if merchant_id in merchant_relation_dict:
+            return merchant_relation_dict[merchant_id]
+        else:
+            return 0
 
     off_test = pd.read_csv('../data/ccf_offline_stage1_test_revised.csv', dtype=str)
     off_test.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received']
@@ -157,13 +211,14 @@ def build_test_data():
     off_test["weekday"] = off_test.apply(lambda row: _calc_weekday(row['date_received']), axis=1)
     off_test["use_data_k"] = off_test.apply(lambda row: _generrate_key(row['user_id'], row['merchant_id']),axis=1)
     off_test['user_merchant_relation'] = off_test.apply(lambda row: _evaluate_user_merchant_relation(row['use_data_k']), axis=1)
+    off_test['merchant_relation'] = off_test.apply(lambda row: _evaluate_merchant_relation(row['merchant_id']),axis=1)
 
     off_test.to_csv("./feature_data/test_data.csv", index=None)
 
 
 def xgb_result2submit():
     xgb_result=pd.read_csv("xgb_preds.csv",dtype=str)
-    xgb_result.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received',"discount_rate_new", "_is_man", "weekday", "use_data_k", "user_merchant_relation", "label"]
+    xgb_result.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received',"discount_rate_new", "_is_man", "weekday", "use_data_k", "user_merchant_relation","merchant_relation","label"]
 
     submit=xgb_result[["user_id","coupon_id","date_received","label"]]
     submit.to_csv("sample_submission.csv", index=None,header=None)
@@ -173,9 +228,11 @@ def xgb_result2submit():
 
 # generate_user_merchant_relation_json()
 
-# build_train_data()
+# generate_merchant_relation_json()
 
-# build_test_data()
+build_train_data()
 
-xgb_result2submit()
+build_test_data()
+
+# xgb_result2submit()
 

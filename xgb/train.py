@@ -18,8 +18,8 @@ test_data=pd.read_csv("./feature_data/test_data.csv",dtype=str)
 test_data=test_data.replace(np.nan,"-1")
 
 
-train_data_x=train_data[["distance","discount_rate_new","_is_man","weekday",'user_merchant_relation']]
-dataset_test_x=test_data[["distance","discount_rate_new","_is_man","weekday",'user_merchant_relation']]
+train_data_x=train_data[["distance","discount_rate_new","_is_man","weekday",'user_merchant_relation','merchant_relation']]
+dataset_test_x=test_data[["distance","discount_rate_new","_is_man","weekday",'user_merchant_relation','merchant_relation']]
 train_data_y=train_data[["label"]]
 
 
@@ -51,6 +51,4 @@ model = xgb.train(params,dataset,num_boost_round=3500,evals=[(dataset,'train')])
 
 test_data['label'] = model.predict(dataset_test)
 test_data.label = MinMaxScaler().fit_transform(test_data['label'].values.reshape(-1, 1))
-# dataset3_preds.sort_values(by=['coupon_id','label'],inplace=True)
 test_data.to_csv("xgb_preds.csv",index=None,header=None)
-# print(dataset3_preds.describe())
