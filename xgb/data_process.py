@@ -7,660 +7,612 @@ import numpy as np
 """
 根据测试集中的字段User_id,Merchant_id,Coupon_id,Discount_rate,Distance,Date_received建立特征数据：
 
-一.Discount_rate
-    discount_total：各discount_rate出现的总次数，
-    discount_total_ratio：各discount_rate出现比例，
-    discount_use：各discount_rate有消费的次数，
-    discount_use_ratio：各discount_rate有消费比例，
-    is_man：是否是满减，
-    discount：换算成统一的折扣率表示。
+一.Discount_rate：
+    discount：换算成小数折扣
+    is_man：是否是满减
+        如果是满减券：
+        max_man：满减情况下，至少要达到的金额
+    discount_use_ratio：该类满减券的实际使用率
 
-二.Date_received
-    weekday：date_received换算成星期数，
-    weekday_total：各date_received星期数出现的总次数，
-    weekday_total_ratio：各date_received星期数出现的比例，
-    weekday_consume：各date_received星期数有被消费的次数，
-    weekday_consume_ratio：各date_received星期数有被消费的比例。
+二.Date_received：
+    week_day：换算成星期数
+    # week_day_use：该星期数的实际优惠券使用率
+    month_day：换算成当月第几天
+    # month_day_use：该月各天的实际优惠券使用率
     
-三.User_id：
-    u_total：各user_id出现的总次数，
-    u_consume：各user_id有消费的次数，
-    u_receive：各user_id领取优惠券的次数，
-    u_consume_with_coupon：各user_id有使用优惠券消费的次数，
-    # u_consume_distance(1-11)：各user_id消费时、11种Distance出现的总次数（稀疏矩阵表示），
-    # u_receive_distance(1-11)：各user_id领取优惠券时、11种Distance出现的总次数（稀疏矩阵表示），
-    u_merchant_consume：各user_id消费各种merchant_id的次数，
-    u_merchant_receive：各user_id领取各种merchant_id优惠券的次数，
-    u_merchant_consume_with_coupon：各user_id消费各种merchant_id并使用了优惠券的次数，
-    u_receive_discount_type_count(1-2)：各user_id领取特定折扣类型（2种）的各自总次数（稀疏矩阵表示），
-    u_consume_with_discount_type_count(1-2)：各user_id领取并使用特定折扣类型（2种）的各自总次数（稀疏矩阵表示），
-    u_receive_weekday_count(1-7)：各user_id领取优惠券时间的7种星期数次数（稀疏矩阵表示），
-    u_consume_with_coupon_weekday_count(1-7)：各user_id领取并使用优惠券时间的7种星期数次数（稀疏矩阵表示）。
+三.Distance：
+    distance_consume_ratio：单一商户距离的消费几率
 
-四.Merchant_id:
-    m_total：各merchant_id出现的总次数，
-    m_total_ratio：各merchant_id出现的比例，
-    m_consume：各merchant_id有被消费的次数，
-    m_consume_ratio：各merchant_id有被消费的比例，
-    m_receive：各merchant_id被领取优惠券的次数，
-    m_receive_ratio：各merchant_id被领取优惠券的比例，
-    m_consume_with_coupon：各merchant_id有被使用优惠券消费的次数，
-    m_consume_with_coupon_ratio：各merchant_id有被使用优惠券消费的比例，
-    m_consume_distance_count(1-11)：各merchant_id被消费时、11种Distance出现的总次数（稀疏矩阵表示），
-    m_consume_distance_count_ratio(1-11)：各merchant_id被消费时、11种Distance出现的比例（稀疏矩阵表示），
-    m_receive_discount_type_count(1-2)：各merchant_id被领取特定折扣类型（2种）的各自总次数（稀疏矩阵表示），
-    m_receive_discount_type_count_ratio(1-2)：各merchant_id被领取特定折扣类型（2种）的比例（稀疏矩阵表示），
-    m_consume_with_coupon_distance_type_count(1-2)各merchant_id被领取并使用特定折扣类型（2种）的各自总次数（稀疏矩阵表示），
-    m_consume_with_coupon_distance_type_count_ratio(1-2)各merchant_id被领取并使用特定折扣类型（2种）的比例（稀疏矩阵表示）。
+四.User_id：
+    user_consume：用户消费的次数
+    user_use_ratio：用户使用优惠券消费的比率
+    user_receive_use_ratio：用户领取和使用优惠券的比重
+    user_merchant_consume_total：用户消费单一商户的次数
+    user_merchant_use_ratio：用户使用优惠券消费单一商户的比率
+    user_distance_consume_ratio：用户在单一距离商户的消费几率   
+    user_receive_use_gap：用户领取到使用优惠券的平均时间间隔
+    user_receive_use_gap_max：用户领取到使用优惠券的最大时间间隔
+
+五.Merchant_id：
+    merchant_consume_total：各商户的被消费总数
+    merchant_use_ratio：各商户被使用优惠券消费的几率
+    merchant_distance_consume_ratio：各商户在单一距离下被消费的几率   
+    # merchant_week_consume_ratio：各商户在单一星期下被消费的几率
+    # merchant_month_consume_ratio：各商户在单一月份天数下被消费的几率
     
-五.Coupon_id
-    c_total：各coupon_id出现的总次数，
-    c_total_ratio：各coupon_id出现的比例，
-    c_consume：各coupon_id有被消费的次数，
-    c_consume_ratio：各coupon_id有被消费的比例。
+    merchant_coupon_type_count：各商户优惠券的种类
     
-六.Distance
-    d_total：各distance出现的总次数，
-    d_total_ratio：各distance出现的比例，
-    d_consume：各distance有消费的次数，
-    d_consume_ratio：各distance有消费的比例，
-    d_receive：各distance被领取优惠券的次数，
-    d_receive_ratio：各distance被领取优惠券的比例，
-    d_consume_with_coupon：各distance有消费并使用了优惠券的次数，
-    d_consume_with_coupon_ratio：各distance有消费并使用了优惠券的比例。
+六.Coupon_id：
+    # coupon_use_ratio：各优惠券被使用的几率
+    
+
+
 
 """
 
 
-def __common_get_value_from_json_dict(json_dict, k):
-    if k in json_dict:
-        return json_dict[k]
-    else:
-        return 0
+def build_discount_feature(data_file="../data/ccf_offline_stage1_train.csv"):
+    t1=pd.read_csv(data_file,dtype=str)
+    t1=t1[pd.notna(t1["Discount_rate"])]
 
-
-def _calc_weekday(date_str):
-    date_str = str(date_str)
-    if date_str=='nan':
-        return "0"
-    return str(int(date(int(date_str[:4]), int(date_str[4:6]), int(date_str[6:])).weekday())+1)
-
-
-def __common_generate_double_k(column1,column2):
-    return "{}_{}".format(column1,column2)
-
-
-def __common_generate_total_json(column_name,json_file,data_file="../data/ccf_offline_stage1_train.csv"):
-    off_train = pd.read_csv(data_file, dtype=str)
-    if data_file=="../data/ccf_offline_stage1_train.csv":
-        off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    off_train=off_train[pd.notna(off_train[column_name])]
-    temp=off_train[[column_name]]
-    temp["count"]=1
-    out=temp.groupby(column_name).agg("sum").reset_index()
-    out_dict=dict()
-    out_dict["total_size"]=str(off_train.size)
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_consume_json(column_name,json_file,data_file="../data/ccf_offline_stage1_train.csv"):
-    off_train = pd.read_csv(data_file, dtype=str)
-    if data_file=="../data/ccf_offline_stage1_train.csv":
-        off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    off_train=off_train[pd.notna(off_train['date'])&pd.notna(off_train[column_name])]
-    temp=off_train[[column_name]]
-    temp["count"]=1
-    out=temp.groupby(column_name).agg("sum").reset_index()
-    out_dict=dict()
-    out_dict["total_size"]=str(off_train.size)
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_receive_json(column_name,json_file):
-    off_train = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
-    off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    off_train=off_train[pd.notna(off_train['date_received'])&pd.notna(off_train[column_name])]
-    temp=off_train[[column_name]]
-    temp["count"]=1
-    out=temp.groupby(column_name).agg("sum").reset_index()
-    out_dict=dict()
-    out_dict["total_size"]=str(off_train.size)
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_consume_with_coupon_json(column_name,json_file):
-    off_train = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
-    off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    off_train=off_train[pd.notna(off_train['date'])&pd.notna(off_train['coupon_id'])&pd.notna(off_train[column_name])]
-    temp=off_train[[column_name]]
-    temp["count"]=1
-    out=temp.groupby(column_name).agg("sum").reset_index()
-    out_dict=dict()
-    out_dict["total_size"]=str(off_train.size)
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_double_consume_json(column_name1,column_name2,json_file):
-    off_train = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
-    off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    off_train=off_train[pd.notna(off_train['date'])&pd.notna(off_train[column_name1])&pd.notna(off_train[column_name2])]
-    off_train["double_k"]=off_train.apply(lambda row:__common_generate_double_k(row[column_name1],row[column_name2]),axis=1)
-    temp=off_train[["double_k"]]
-    temp["count"]=1
-    out=temp.groupby("double_k").agg("sum").reset_index()
-    out_dict=dict()
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_double_receive_json(column_name1,column_name2,json_file):
-    off_train = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
-    off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    off_train=off_train[pd.notna(off_train['date_received'])&pd.notna(off_train[column_name1])&pd.notna(off_train[column_name2])]
-    off_train["double_k"]=off_train.apply(lambda row:__common_generate_double_k(row[column_name1],row[column_name2]),axis=1)
-    temp=off_train[["double_k"]]
-    temp["count"]=1
-    out=temp.groupby("double_k").agg("sum").reset_index()
-    out_dict=dict()
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_double_consume_with_coupon_json(column_name1,column_name2,json_file):
-    off_train = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
-    off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    off_train=off_train[pd.notna(off_train['date'])&pd.notna(off_train['coupon_id'])&pd.notna(off_train[column_name1])&pd.notna(off_train[column_name2])]
-    off_train["double_k"]=off_train.apply(lambda row:__common_generate_double_k(row[column_name1],row[column_name2]),axis=1)
-    temp=off_train[["double_k"]]
-    temp["count"]=1
-    out=temp.groupby("double_k").agg("sum").reset_index()
-    out_dict=dict()
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_receive_discount_man_type_count_json(column_name,json_file):
-    train_data1 = pd.read_csv("./feature_data/train_data1.csv", dtype=str)
-    train_data1['is_man'].astype(str)
-    train_data1=train_data1[pd.notna(train_data1['date_received'])&(train_data1['is_man']=="1")&pd.notna(train_data1[column_name])]
-    temp=train_data1[[column_name]]
-    temp["count"]=1
-    out=temp.groupby(column_name).agg("sum").reset_index()
-    out_dict=dict()
-    out_dict["total_size"]=str(train_data1.size)
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_receive_discount_kou_type_count_json(column_name,json_file):
-    train_data1 = pd.read_csv("./feature_data/train_data1.csv", dtype=str)
-    train_data1['is_man'].astype(str)
-    train_data1=train_data1[pd.notna(train_data1['date_received'])&(train_data1['is_man']=="0")&pd.notna(train_data1[column_name])]
-    temp=train_data1[[column_name]]
-    temp["count"]=1
-    out=temp.groupby(column_name).agg("sum").reset_index()
-    out_dict=dict()
-    out_dict["total_size"] = str(train_data1.size)
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_consume_with_discount_man_type_count_json(column_name,json_file):
-    train_data1 = pd.read_csv("./feature_data/train_data1.csv", dtype=str)
-    train_data1['is_man'].astype(str)
-    train_data1=train_data1[pd.notna(train_data1['coupon_id'])&pd.notna(train_data1['date'])&(train_data1['is_man']=="1")&pd.notna(train_data1[column_name])]
-    temp=train_data1[[column_name]]
-    temp["count"]=1
-    out=temp.groupby(column_name).agg("sum").reset_index()
-    out_dict=dict()
-    out_dict["total_size"] = str(train_data1.size)
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-def __common_generate_consume_with_discount_kou_type_count_json(column_name,json_file):
-    train_data1 = pd.read_csv("./feature_data/train_data1.csv", dtype=str)
-    train_data1['is_man'].astype(str)
-    train_data1=train_data1[pd.notna(train_data1['coupon_id'])&pd.notna(train_data1['date'])&(train_data1['is_man']=="0")&pd.notna(train_data1[column_name])]
-    temp=train_data1[[column_name]]
-    temp["count"]=1
-    out=temp.groupby(column_name).agg("sum").reset_index()
-    out_dict=dict()
-    out_dict["total_size"] = str(train_data1.size)
-    for row in out.values:
-        out_dict[row[0]]=row[1]
-    with open(json_file,"w",encoding="utf-8") as f:
-        json.dump(out_dict,f,ensure_ascii=False)
-
-
-"""
-检查或构造各json数据
-"""
-def __check_discount_rate_feature_json_file():
-    if not os.path.exists("./json_data/discount_total.json"):
-        __common_generate_total_json("discount_rate","./json_data/discount_total.json")
-    if not os.path.exists("./json_data/discount_use.json"):
-        __common_generate_consume_json("discount_rate", "./json_data/discount_use.json")
-
-
-def __check_date_received_feature_json_file():
-    if not os.path.exists("./json_data/weekday_total.json"):
-        __common_generate_total_json("weekday","./json_data/weekday_total.json",data_file="./feature_data/train_data2_temp.csv")
-    if not os.path.exists("./json_data/weekday_consume.json"):
-        __common_generate_consume_json("weekday", "./json_data/weekday_consume.json",data_file="./feature_data/train_data2_temp.csv")
-
-
-def __check_user_id_feature_json_file():
-    if not os.path.exists("./json_data/u_total.json"):
-        __common_generate_total_json("user_id","./json_data/u_total.json")
-    if not os.path.exists("./json_data/u_consume.json"):
-        __common_generate_consume_json("user_id", "./json_data/u_consume.json")
-    if not os.path.exists("./json_data/u_receive.json"):
-        __common_generate_receive_json("user_id", "./json_data/u_receive.json")
-    if not os.path.exists("./json_data/u_consume_with_coupon.json"):
-        __common_generate_consume_with_coupon_json("user_id", "./json_data/u_consume_with_coupon.json")
-    if not os.path.exists("./json_data/u_merchant_consume.json"):
-        __common_generate_double_consume_json("user_id", "merchant_id", "./json_data/u_merchant_consume.json")
-    if not os.path.exists("./json_data/u_merchant_receive.json"):
-        __common_generate_double_receive_json("user_id", "merchant_id", "./json_data/u_merchant_receive.json")
-    if not os.path.exists("./json_data/u_merchant_consume_with_coupon.json"):
-        __common_generate_double_consume_with_coupon_json("user_id", "merchant_id", "./json_data/u_merchant_consume_with_coupon.json")
-    if not os.path.exists("./json_data/u_receive_discount_type_count1.json"):
-        __common_generate_receive_discount_man_type_count_json("user_id", "./json_data/u_receive_discount_type_count1.json")
-    if not os.path.exists("./json_data/u_receive_discount_type_count2.json"):
-        __common_generate_receive_discount_kou_type_count_json("user_id", "./json_data/u_receive_discount_type_count2.json")
-    if not os.path.exists("./json_data/u_consume_with_discount_type_count1.json"):
-        __common_generate_consume_with_discount_man_type_count_json("user_id", "./json_data/u_consume_with_discount_type_count1.json")
-    if not os.path.exists("./json_data/u_consume_with_discount_type_count2.json"):
-        __common_generate_consume_with_discount_kou_type_count_json("user_id", "./json_data/u_consume_with_discount_type_count2.json")
-
-
-def __check_merchant_id_feature_json_file():
-    if not os.path.exists("./json_data/m_total.json"):
-        __common_generate_total_json("merchant_id","./json_data/m_total.json")
-    if not os.path.exists("./json_data/m_consume.json"):
-        __common_generate_consume_json("merchant_id", "./json_data/m_consume.json")
-    if not os.path.exists("./json_data/m_receive.json"):
-        __common_generate_receive_json("merchant_id", "./json_data/m_receive.json")
-    if not os.path.exists("./json_data/m_consume_with_coupon.json"):
-        __common_generate_consume_with_coupon_json("merchant_id", "./json_data/m_consume_with_coupon.json")
-    if not os.path.exists("./json_data/m_receive_discount_type_count1.json"):
-        __common_generate_receive_discount_man_type_count_json("merchant_id", "./json_data/m_receive_discount_type_count1.json")
-    if not os.path.exists("./json_data/m_receive_discount_type_count2.json"):
-        __common_generate_receive_discount_kou_type_count_json("merchant_id", "./json_data/m_receive_discount_type_count2.json")
-    if not os.path.exists("./json_data/m_consume_with_discount_type_count1.json"):
-        __common_generate_consume_with_discount_man_type_count_json("merchant_id", "./json_data/m_consume_with_discount_type_count1.json")
-    if not os.path.exists("./json_data/m_consume_with_discount_type_count2.json"):
-        __common_generate_consume_with_discount_kou_type_count_json("merchant_id", "./json_data/m_consume_with_discount_type_count2.json")
-
-
-def __check_coupon_id_feature_json_file():
-    if not os.path.exists("./json_data/c_total.json"):
-        __common_generate_total_json("coupon_id","./json_data/c_total.json")
-    if not os.path.exists("./json_data/c_consume.json"):
-        __common_generate_consume_json("coupon_id", "./json_data/c_consume.json")
-
-
-def __check_distance_feature_json_file():
-    if not os.path.exists("./json_data/d_total.json"):
-        __common_generate_total_json("distance","./json_data/d_total.json")
-    if not os.path.exists("./json_data/d_consume.json"):
-        __common_generate_consume_json("distance", "./json_data/d_consume.json")
-    if not os.path.exists("./json_data/d_receive.json"):
-        __common_generate_receive_json("distance", "./json_data/d_receive.json")
-    if not os.path.exists("./json_data/d_consume_with_coupon.json"):
-        __common_generate_consume_with_coupon_json("distance", "./json_data/d_consume_with_coupon.json")
-
-
-def __check_user_action_dict_json_file():
-    if not os.path.exists("./json_data/user_action_dict.json"):
-        off_train = pd.read_csv('../data/ccf_offline_stage1_train.csv', dtype=str)
-        off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received','date']
-        use_data = off_train[pd.notna(off_train.date)]
-
-        user_action_dict = dict()
-        for i in use_data.values:
-            k = "{}_{}".format(i[0], i[1])
-            if k not in user_action_dict:
-                user_action_dict[k] = []
-            user_action_dict[k].append("{}_{}_{}_{}_{}".format(i[2], i[3], i[4], i[5], i[6]))
-
-        with open("./json_data/user_action_dict.json", "w", encoding="utf-8") as f:
-            json.dump(user_action_dict, f, ensure_ascii=False)
-
-
-"""
-生成特征数据
-"""
-def generate_discount_rate_feature(in_file="../data/ccf_offline_stage1_train.csv",out_file="./feature_data/train_data1.csv"):
-    """
-    discount_total：各discount_rate出现的总次数，
-    discount_total_ratio：各discount_rate出现比例，
-    discount_use：各discount_rate有消费的次数，
-    discount_use_ratio：各discount_rate有消费比例，
-    is_man：是否是满减，
-    discount：换算成统一的折扣率表示。
-    """
-    if os.path.exists(out_file):
-        return
-    __check_discount_rate_feature_json_file()
-
-    off_train = pd.read_csv(in_file, dtype=str)
-    if in_file=="../data/ccf_offline_stage1_train.csv":
-        off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    else:
-        off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received']
-
-    with open("./json_data/discount_total.json", "r", encoding="utf-8") as f:
-        discount_total_dict=json.load(f)
-        discount_total_dict_size=int(discount_total_dict["total_size"])
-        off_train["discount_total"]=off_train.apply(lambda row:__common_get_value_from_json_dict(discount_total_dict,row["discount_rate"]),axis=1)
-        off_train["discount_total_ratio"] = off_train.discount_total.apply(lambda row: int(row) / discount_total_dict_size)
-
-    with open("./json_data/discount_use.json", "r", encoding="utf-8") as f:
-        discount_use_dict=json.load(f)
-        discount_use_dict_size=int(discount_use_dict["total_size"])
-        off_train["discount_use"] = off_train.apply(lambda row: __common_get_value_from_json_dict(discount_use_dict, row["discount_rate"]), axis=1)
-        off_train["discount_use_ratio"] = off_train.discount_use.apply(lambda row: int(row) / discount_use_dict_size)
-
-    def __is_man(discount_rate):
-        if str(discount_rate).__contains__(":"):
-            return 1
-        else:
-            return 0
-    off_train["is_man"] = off_train.apply(lambda row: __is_man(row["discount_rate"]), axis=1)
-
-    def _calc_discount_rate(discount_rate):
-        if str(discount_rate).__contains__(":"):
-            s = discount_rate.split(':')
-            if len(s) == 1:
-                return float(s[0])
+    def __s1(t1_origin):
+        def __calc_discount_rate(discount_rate):
+            if str(discount_rate).__contains__(":"):
+                s = discount_rate.split(':')
+                if len(s) == 1:
+                    return float(s[0])
+                else:
+                    return str(round((1.0 - float(s[1]) / float(s[0])), 4))
             else:
-                return 1.0 - float(s[1]) / float(s[0])
+                return str(round(float(discount_rate), 4))
+        t1_origin["discount"] = t1_origin.apply(lambda row: __calc_discount_rate(row["Discount_rate"]), axis=1)
+        return t1_origin
+
+    def __s2(t1_origin):
+        def __is_man(Discount_rate):
+            if Discount_rate.__contains__(":"):
+                return "1"
+            else:
+                return "0"
+        t1_origin["is_man"] = t1_origin.apply(lambda row: __is_man(row["Discount_rate"]), axis=1)
+        return t1_origin
+
+    def __s3(t1_origin):
+        def __max_man(Discount_rate):
+            if Discount_rate.__contains__(":"):
+                return str(Discount_rate).split(":")[0]
+            else:
+                return "-1"
+        t1_origin["max_man"] = t1_origin.apply(lambda row: __max_man(row["Discount_rate"]), axis=1)
+        return t1_origin
+
+    def __s4(t1_origin):
+        if os.path.exists("./json_data/discount_use_ratio.json"):
+            with open("./json_data/discount_use_ratio.json","r",encoding="utf-8") as f:
+                temp_use_dict=json.load(f)
         else:
-            return discount_rate
-    off_train["discount"] = off_train.apply(lambda row: _calc_discount_rate(row["discount_rate"]), axis=1)
+            t1 = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            t1_copy = t1[["Discount_rate"]]
+            t1_copy["count"] = 1
+            t1_receive_out = t1_copy.groupby("Discount_rate").agg("sum").reset_index()
+            temp_receive_dict = dict()
+            for i in t1_receive_out.values:
+                temp_receive_dict[i[0]] = int(i[1])
+            t1_use = t1[pd.notna(t1["Date"])]
+            t1_use["count"] = 1
+            t1_man_use_out = t1_use.groupby("Discount_rate").agg("sum").reset_index()
+            temp_use_dict = dict()
+            for i in t1_man_use_out.values:
+                temp_use_dict[i[0]] = str(round(int(i[1]) / temp_receive_dict[i[0]], 4))
+            with open("./json_data/discount_use_ratio.json","w",encoding="utf-8") as f:
+                json.dump(temp_use_dict, f, ensure_ascii=False)
 
-    off_train.to_csv(out_file,index=None)
+        def __get_use_ratio(Discount_rate):
+            if Discount_rate in temp_use_dict:
+                return temp_use_dict[Discount_rate]
+            return "-1"
 
+        t1_origin["discount_use_ratio"] = t1_origin.apply(lambda row: __get_use_ratio(row["Discount_rate"]), axis=1)
+        return t1_origin
 
-def generate_date_received_feature(in_file="./feature_data/train_data1.csv",out_file="./feature_data/train_data2.csv",temp_file="./feature_data/train_data2_temp.csv"):
-    """
-    weekday：date_received换算成星期数，
-    weekday_total：各date_received星期数出现的总次数，
-    weekday_total_ratio：各date_received星期数出现的比例，
-    weekday_consume：各date_received星期数有被消费的次数，
-    weekday_consume_ratio：各date_received星期数有被消费的比例。
-    """
-    if os.path.exists(out_file):
-        return
-    if not os.path.exists(temp_file):
-        train_data1 = pd.read_csv(in_file, dtype=str)
-        train_data1["weekday"]=train_data1.apply(lambda row:_calc_weekday(row["date_received"]),axis=1)
-        train_data1.to_csv(temp_file,index=None)
-
-    __check_date_received_feature_json_file()
-    train_data2_temp = pd.read_csv(temp_file, dtype=str)
-    with open("./json_data/weekday_total.json", "r", encoding="utf-8") as f:
-        weekday_total_dict=json.load(f)
-        weekday_total_dict_size=int(weekday_total_dict["total_size"])
-        train_data2_temp["weekday_total"]=train_data2_temp.apply(lambda row:__common_get_value_from_json_dict(weekday_total_dict,row["weekday"]),axis=1)
-        train_data2_temp["weekday_total_ratio"] = train_data2_temp.weekday_total.apply(lambda row: int(row) / weekday_total_dict_size)
-
-    with open("./json_data/weekday_consume.json", "r", encoding="utf-8") as f:
-        weekday_consume_dict=json.load(f)
-        weekday_consume_dict_size=int(weekday_consume_dict["total_size"])
-        train_data2_temp["weekday_consume"] = train_data2_temp.apply(lambda row: __common_get_value_from_json_dict(weekday_consume_dict, row["weekday"]), axis=1)
-        train_data2_temp["weekday_consume_ratio"] = train_data2_temp.weekday_consume.apply(lambda row: int(row) / weekday_consume_dict_size)
-
-    train_data2_temp.to_csv(out_file,index=None)
+    t1=__s1(t1)
+    t1=__s2(t1)
+    t1=__s3(t1)
+    t1=__s4(t1)
+    if data_file=="../data/ccf_offline_stage1_train.csv":
+        t1.to_csv("./feature_data/t1.csv", index=None)
+    else:
+        t1.to_csv("./test_data/t1.csv", index=None)
 
 
-def generate_user_id_feature(in_file="./feature_data/train_data2.csv",out_file="./feature_data/train_data3.csv"):
-    """
-    u_total：各user_id出现的总次数，
-    u_consume：各user_id有消费的次数，
-    u_receive：各user_id领取优惠券的次数，
-    u_consume_with_coupon：各user_id有使用优惠券消费的次数，
-    # u_consume_distance(1-11)：各user_id消费时、11种Distance出现的总次数（稀疏矩阵表示），
-    # u_receive_distance(1-11)：各user_id领取优惠券时、11种Distance出现的总次数（稀疏矩阵表示），
-    u_merchant_consume：各user_id消费各种merchant_id的次数，
-    u_merchant_receive：各user_id领取各种merchant_id优惠券的次数，
-    u_merchant_consume_with_coupon：各user_id消费各种merchant_id并使用了优惠券的次数，
-    u_receive_discount_type_count(1-2)：各user_id领取特定折扣类型（2种）的各自总次数（稀疏矩阵表示），
-    u_consume_with_discount_type_count(1-2)：各user_id领取并使用特定折扣类型（2种）的各自总次数（稀疏矩阵表示），
-    # u_receive_weekday_count(1-7)：各user_id领取优惠券时间的7种星期数次数（稀疏矩阵表示），
-    # u_consume_with_coupon_weekday_count(1-7)：各user_id领取并使用优惠券时间的7种星期数次数（稀疏矩阵表示）。
-    """
-    if os.path.exists(out_file):
-        return
-    __check_user_id_feature_json_file()
+def build_date_received_feature(data_file="./feature_data/t1.csv"):
+    t2 = pd.read_csv(data_file, dtype=str)
 
-    train_data2 = pd.read_csv(in_file, dtype=str)
-    # off_train.columns = ['user_id', 'merchant_id', 'coupon_id', 'discount_rate', 'distance', 'date_received', 'date']
-    train_data2["u_m_k"] = train_data2.apply(lambda row: __common_generate_double_k(row["user_id"], row["merchant_id"]),axis=1)
+    def __s1(t2_origin):
+        def _calc_weekday(date_str):
+            return str(int(date(int(date_str[:4]), int(date_str[4:6]), int(date_str[6:])).weekday()) + 1)
+        t2_origin["week_day"] = t2_origin.apply(lambda row: _calc_weekday(row["Date_received"]), axis=1)
+        return t2_origin
 
-    with open("./json_data/u_total.json", "r", encoding="utf-8") as f:
-        u_total_dict=json.load(f)
-        train_data2["u_total"]=train_data2.apply(lambda row:__common_get_value_from_json_dict(u_total_dict,row["user_id"]),axis=1)
+    def __s2(t2_origin):
+        if os.path.exists("./json_data/week_day_use.json"):
+            with open("./json_data/week_day_use.json","r",encoding="utf-8") as f:
+                t2_use_dict=json.load(f)
+        else:
+            t2 = pd.read_csv("./feature_data/t1.csv", dtype=str)
+            t2_copy = t2[["week_day"]]
+            t2_copy["count"] = 1
+            t2_receive_out = t2_copy.groupby("week_day").agg("sum").reset_index()
+            t2_receive_dict = dict()
+            for i in t2_receive_out.values:
+                t2_receive_dict[i[0]] = i[1]
+            t2_use = t2[pd.notna(t2["Date"])]
+            t2_use = t2_use[["week_day"]]
+            t2_use["count"] = 1
+            t2_use_out = t2_use.groupby("week_day").agg("sum").reset_index()
+            t2_use_dict = dict()
+            for i in t2_use_out.values:
+                t2_use_dict[i[0]] = str(round(int(i[1]) / t2_receive_dict[i[0]], 4))
+            with open("./json_data/week_day_use.json","w",encoding="utf-8") as f:
+                json.dump(t2_use_dict, f, ensure_ascii=False)
 
-    with open("./json_data/u_consume.json", "r", encoding="utf-8") as f:
-        u_consume_dict=json.load(f)
-        train_data2["u_consume"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_consume_dict, row["user_id"]), axis=1)
+        def __get_use_ratio(week_day):
+            return t2_use_dict[week_day]
+        t2_origin["week_day_use"] = t2_origin.apply(lambda row: __get_use_ratio(row["week_day"]), axis=1)
+        return t2_origin
 
-    with open("./json_data/u_receive.json", "r", encoding="utf-8") as f:
-        u_receive_dict = json.load(f)
-        train_data2["u_receive"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_receive_dict, row["user_id"]), axis=1)
+    def __s3(t2_origin):
+        def _calc_month_day(date_str):
+            return str(int(date_str[6:8]))
+        t2_origin["month_day"] = t2_origin.apply(lambda row: _calc_month_day(row["Date_received"]), axis=1)
+        return t2_origin
 
-    with open("./json_data/u_consume_with_coupon.json", "r", encoding="utf-8") as f:
-        u_consume_with_coupon_dict = json.load(f)
-        train_data2["u_consume_with_coupon"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_consume_with_coupon_dict, row["user_id"]), axis=1)
+    def __s4(t2_origin):
+        if os.path.exists("./json_data/month_day_use.json"):
+            with open("./json_data/month_day_use.json","r",encoding="utf-8") as f:
+                t2_use_dict=json.load(f)
+        else:
+            t2 = pd.read_csv("./feature_data/t1.csv", dtype=str)
+            t2_copy = t2[["month_day"]]
+            t2_copy["count"] = 1
+            t2_receive_out = t2_copy.groupby("month_day").agg("sum").reset_index()
+            t2_receive_dict = dict()
+            for i in t2_receive_out.values:
+                t2_receive_dict[i[0]] = i[1]
+            t2_use = t2[pd.notna(t2["Date"])]
+            t2_use = t2_use[["month_day"]]
+            t2_use["count"] = 1
+            t2_use_out = t2_use.groupby("month_day").agg("sum").reset_index()
+            t2_use_dict = dict()
+            for i in t2_use_out.values:
+                t2_use_dict[i[0]] = str(round(int(i[1]) / t2_receive_dict[i[0]], 4))
+            with open("./json_data/month_day_use.json","w",encoding="utf-8") as f:
+                json.dump(t2_use_dict, f, ensure_ascii=False)
 
-    with open("./json_data/u_merchant_consume.json", "r", encoding="utf-8") as f:
-        u_merchant_consume_dict = json.load(f)
-        train_data2["u_merchant_consume"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_merchant_consume_dict, row["u_m_k"]), axis=1)
+        def __get_use_ratio(month_day):
+            return t2_use_dict[month_day]
+        t2_origin["month_day_use"] = t2_origin.apply(lambda row: __get_use_ratio(row["month_day"]), axis=1)
+        return t2_origin
 
-    with open("./json_data/u_merchant_receive.json", "r", encoding="utf-8") as f:
-        u_merchant_receive_dict = json.load(f)
-        train_data2["u_merchant_receive"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_merchant_receive_dict, row["u_m_k"]), axis=1)
-
-    with open("./json_data/u_merchant_consume_with_coupon.json", "r", encoding="utf-8") as f:
-        u_merchant_consume_with_coupon_dict = json.load(f)
-        train_data2["u_merchant_consume_with_coupon"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_merchant_consume_with_coupon_dict, row["u_m_k"]), axis=1)
-
-    with open("./json_data/u_receive_discount_type_count1.json", "r", encoding="utf-8") as f:
-        u_receive_discount_type_count1_dict = json.load(f)
-        train_data2["u_receive_discount_type_count1"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_receive_discount_type_count1_dict, row["user_id"]), axis=1)
-
-    with open("./json_data/u_receive_discount_type_count2.json", "r", encoding="utf-8") as f:
-        u_receive_discount_type_count2_dict = json.load(f)
-        train_data2["u_receive_discount_type_count2"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_receive_discount_type_count2_dict, row["user_id"]), axis=1)
-
-    with open("./json_data/u_consume_with_discount_type_count1.json", "r", encoding="utf-8") as f:
-        u_consume_with_discount_type_count1_dict = json.load(f)
-        train_data2["u_consume_with_discount_type_count1"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_consume_with_discount_type_count1_dict, row["user_id"]), axis=1)
-
-    with open("./json_data/u_consume_with_discount_type_count2.json", "r", encoding="utf-8") as f:
-        u_consume_with_discount_type_count2_dict = json.load(f)
-        train_data2["u_consume_with_discount_type_count2"] = train_data2.apply(lambda row: __common_get_value_from_json_dict(u_consume_with_discount_type_count2_dict, row["user_id"]), axis=1)
-
-    train_data2.to_csv(out_file, index=None)
-
-
-def generate_merchant_id_feature(in_file="./feature_data/train_data3.csv",out_file="./feature_data/train_data4.csv"):
-    """
-    m_total：各merchant_id出现的总次数，
-    m_total_ratio：各merchant_id出现的比例，
-    m_consume：各merchant_id有被消费的次数，
-    m_consume_ratio：各merchant_id有被消费的比例，
-    m_receive：各merchant_id被领取优惠券的次数，
-    m_receive_ratio：各merchant_id被领取优惠券的比例，
-    m_consume_with_coupon：各merchant_id有被使用优惠券消费的次数，
-    m_consume_with_coupon_ratio：各merchant_id有被使用优惠券消费的比例，
-    m_consume_distance_count(1-11)：各merchant_id被消费时、11种Distance出现的总次数（稀疏矩阵表示），
-    m_consume_distance_count_ratio(1-11)：各merchant_id被消费时、11种Distance出现的比例（稀疏矩阵表示），
-    m_receive_discount_type_count(1-2)：各merchant_id被领取特定折扣类型（2种）的各自总次数（稀疏矩阵表示），
-    m_receive_discount_type_count_ratio(1-2)：各merchant_id被领取特定折扣类型（2种）的比例（稀疏矩阵表示），
-    m_consume_with_coupon_distance_type_count(1-2)各merchant_id被领取并使用特定折扣类型（2种）的各自总次数（稀疏矩阵表示），
-    m_consume_with_coupon_distance_type_count_ratio(1-2)各merchant_id被领取并使用特定折扣类型（2种）的比例（稀疏矩阵表示）。
-    """
-    if os.path.exists(out_file):
-        return
-    __check_merchant_id_feature_json_file()
-
-    train_data3 = pd.read_csv(in_file, dtype=str)
-
-    with open("./json_data/m_total.json", "r", encoding="utf-8") as f:
-        m_total_dict=json.load(f)
-        m_total_dict_size=int(m_total_dict["total_size"])
-        train_data3["m_total"]=train_data3.apply(lambda row:__common_get_value_from_json_dict(m_total_dict,row["merchant_id"]),axis=1)
-        train_data3["m_total_ratio"] = train_data3.m_total.apply(lambda row: int(row) / m_total_dict_size)
-
-    with open("./json_data/m_consume.json", "r", encoding="utf-8") as f:
-        m_consume_dict=json.load(f)
-        m_consume_dict_size=int(m_consume_dict["total_size"])
-        train_data3["m_consume"] = train_data3.apply(lambda row: __common_get_value_from_json_dict(m_consume_dict, row["merchant_id"]), axis=1)
-        train_data3["m_consume_ratio"] = train_data3.m_consume.apply(lambda row: int(row) / m_consume_dict_size)
-
-    with open("./json_data/m_receive.json", "r", encoding="utf-8") as f:
-        m_receive_dict = json.load(f)
-        m_receive_dict_size=int(m_receive_dict["total_size"])
-        train_data3["m_receive"] = train_data3.apply(lambda row: __common_get_value_from_json_dict(m_receive_dict, row["merchant_id"]), axis=1)
-        train_data3["m_receive_ratio"] = train_data3.m_receive.apply(lambda row: int(row) / m_receive_dict_size)
-
-    with open("./json_data/m_consume_with_coupon.json", "r", encoding="utf-8") as f:
-        m_consume_with_coupon_dict = json.load(f)
-        m_consume_with_coupon_dict_size=int(m_consume_with_coupon_dict["total_size"])
-        train_data3["m_consume_with_coupon"] = train_data3.apply(lambda row: __common_get_value_from_json_dict(m_consume_with_coupon_dict, row["merchant_id"]), axis=1)
-        train_data3["m_consume_with_coupon_ratio"] = train_data3.m_consume_with_coupon.apply(lambda row: int(row) / m_consume_with_coupon_dict_size)
-
-    with open("./json_data/m_receive_discount_type_count1.json", "r", encoding="utf-8") as f:
-        m_receive_discount_type_count1_dict = json.load(f)
-        m_receive_discount_type_count1_dict_size=int(m_receive_discount_type_count1_dict["total_size"])
-        train_data3["m_receive_discount_type_count1"] = train_data3.apply(lambda row: __common_get_value_from_json_dict(m_receive_discount_type_count1_dict, row["merchant_id"]), axis=1)
-        train_data3["m_receive_discount_type_count1_ratio"] = train_data3.m_receive_discount_type_count1.apply(lambda row: int(row) / m_receive_discount_type_count1_dict_size)
-
-    with open("./json_data/m_receive_discount_type_count2.json", "r", encoding="utf-8") as f:
-        m_receive_discount_type_count2_dict = json.load(f)
-        m_receive_discount_type_count2_dict_size=int(m_receive_discount_type_count2_dict["total_size"])
-        train_data3["m_receive_discount_type_count2"] = train_data3.apply(lambda row: __common_get_value_from_json_dict(m_receive_discount_type_count2_dict, row["merchant_id"]), axis=1)
-        train_data3["m_receive_discount_type_count2_ratio"] = train_data3.m_receive_discount_type_count2.apply(lambda row: int(row) / m_receive_discount_type_count2_dict_size)
-
-    with open("./json_data/m_consume_with_discount_type_count1.json", "r", encoding="utf-8") as f:
-        m_consume_with_discount_type_count1_dict = json.load(f)
-        m_consume_with_discount_type_count1_dict_size=int(m_consume_with_discount_type_count1_dict["total_size"])
-        train_data3["m_consume_with_discount_type_count1"] = train_data3.apply(lambda row: __common_get_value_from_json_dict(m_consume_with_discount_type_count1_dict, row["merchant_id"]), axis=1)
-        train_data3["m_consume_with_discount_type_count1_ratio"] = train_data3.m_consume_with_discount_type_count1.apply(lambda row: int(row) / m_consume_with_discount_type_count1_dict_size)
-
-    with open("./json_data/m_consume_with_discount_type_count2.json", "r", encoding="utf-8") as f:
-        m_consume_with_discount_type_count2_dict = json.load(f)
-        m_consume_with_discount_type_count2_dict_size=int(m_consume_with_discount_type_count2_dict["total_size"])
-        train_data3["m_consume_with_discount_type_count2"] = train_data3.apply(lambda row: __common_get_value_from_json_dict(m_consume_with_discount_type_count2_dict, row["merchant_id"]), axis=1)
-        train_data3["m_consume_with_discount_type_count2_ratio"] = train_data3.m_consume_with_discount_type_count2.apply(lambda row: int(row) / m_consume_with_discount_type_count2_dict_size)
-
-    train_data3.to_csv(out_file, index=None)
+    t2=__s1(t2)
+    # __s2()
+    t2=__s3(t2)
+    # __s4()
+    if data_file=="./feature_data/t1.csv":
+        t2.to_csv("./feature_data/t2.csv", index=None)
+    else:
+        t2.to_csv("./test_data/t2.csv", index=None)
 
 
-def generate_coupon_id_feature(in_file="./feature_data/train_data4.csv",out_file="./feature_data/train_data5.csv"):
-    """
-    c_total：各coupon_id出现的总次数，
-    c_total_ratio：各coupon_id出现的比例，
-    c_consume：各coupon_id有被消费的次数，
-    c_consume_ratio：各coupon_id有被消费的比例。
-    """
-    if os.path.exists(out_file):
-        return
-    __check_coupon_id_feature_json_file()
+def build_distance_feature(data_file="./feature_data/t2.csv"):
+    if os.path.exists("./json_data/distance_consume_ratio.json"):
+        with open("./json_data/distance_consume_ratio.json", "r", encoding="utf-8") as f:
+            distance_consume_ratio_dict = json.load(f)
+    else:
+        origin_data=pd.read_csv("../data/ccf_offline_stage1_train.csv",dtype=str)
+        consume_data=origin_data[pd.notna(origin_data["Date"])]
+        consume_total_size=consume_data.size
+        consume_data=consume_data[["Distance"]]
+        consume_data["Distance"]=consume_data["Distance"].replace(np.nan,"-1")
+        consume_data["count"]=1
+        consume_data_out=consume_data.groupby("Distance").agg("sum").reset_index()
+        distance_consume_ratio_dict=dict()
+        for i in consume_data_out.values:
+            distance_consume_ratio_dict[i[0]]=str(round((int(i[1])/consume_total_size),4))
+        with open("./json_data/distance_consume_ratio.json", "w", encoding="utf-8") as f:
+            json.dump(distance_consume_ratio_dict,f,ensure_ascii=False)
 
-    train_data4 = pd.read_csv(in_file, dtype=str)
+    def __get_distance_consume_ratio(distance):
+        if distance in distance_consume_ratio_dict:
+            return distance_consume_ratio_dict[distance]
+        return "0"
 
-    with open("./json_data/c_total.json", "r", encoding="utf-8") as f:
-        c_total_dict=json.load(f)
-        c_total_dict_size=int(c_total_dict["total_size"])
-        train_data4["c_total"]=train_data4.apply(lambda row:__common_get_value_from_json_dict(c_total_dict,row["coupon_id"]),axis=1)
-        train_data4["c_total_ratio"] = train_data4.c_total.apply(lambda row: int(row) / c_total_dict_size)
+    t2=pd.read_csv(data_file,dtype=str)
+    t2["Distance"]=t2["Distance"].replace(np.nan, "-1")
+    t2["distance_consume_ratio"] = t2.apply(lambda row: __get_distance_consume_ratio(row["Distance"]), axis=1)
 
-    with open("./json_data/c_consume.json", "r", encoding="utf-8") as f:
-        c_consume_dict=json.load(f)
-        c_consume_dict_size=int(c_consume_dict["total_size"])
-        train_data4["c_consume"] = train_data4.apply(lambda row: __common_get_value_from_json_dict(c_consume_dict, row["coupon_id"]), axis=1)
-        train_data4["c_consume_ratio"] = train_data4.c_consume.apply(lambda row: int(row) / c_consume_dict_size)
-
-    train_data4.to_csv(out_file, index=None)
-
-
-def generate_distance_feature(in_file="./feature_data/train_data5.csv",out_file="./feature_data/train_data6.csv"):
-    """
-    d_total：各distance出现的总次数，
-    d_total_ratio：各distance出现的比例，
-    d_consume：各distance有消费的次数，
-    d_consume_ratio：各distance有消费的比例，
-    d_receive：各distance被领取优惠券的次数，
-    d_receive_ratio：各distance被领取优惠券的比例，
-    d_consume_with_coupon：各distance有消费并使用了优惠券的次数，
-    d_consume_with_coupon_ratio：各distance有消费并使用了优惠券的比例。
-    """
-    if os.path.exists(out_file):
-        return
-    __check_distance_feature_json_file()
-
-    train_data5 = pd.read_csv(in_file, dtype=str)
-
-    with open("./json_data/d_total.json", "r", encoding="utf-8") as f:
-        d_total_dict=json.load(f)
-        d_total_dict_size=int(d_total_dict["total_size"])
-        train_data5["d_total"]=train_data5.apply(lambda row:__common_get_value_from_json_dict(d_total_dict,row["distance"]),axis=1)
-        train_data5["d_total_ratio"] = train_data5.d_total.apply(lambda row: int(row) / d_total_dict_size)
-
-    with open("./json_data/d_consume.json", "r", encoding="utf-8") as f:
-        d_consume_dict=json.load(f)
-        d_consume_dict_size=int(d_consume_dict["total_size"])
-        train_data5["d_consume"] = train_data5.apply(lambda row: __common_get_value_from_json_dict(d_consume_dict, row["distance"]), axis=1)
-        train_data5["d_consume_ratio"] = train_data5.d_consume.apply(lambda row: int(row) / d_consume_dict_size)
-
-    with open("./json_data/d_receive.json", "r", encoding="utf-8") as f:
-        d_receive_dict = json.load(f)
-        d_receive_dict_size=int(d_receive_dict["total_size"])
-        train_data5["d_receive"] = train_data5.apply(lambda row: __common_get_value_from_json_dict(d_receive_dict, row["distance"]), axis=1)
-        train_data5["d_receive_ratio"] = train_data5.d_receive.apply(lambda row: int(row) / d_receive_dict_size)
-
-    with open("./json_data/d_consume_with_coupon.json", "r", encoding="utf-8") as f:
-        d_consume_with_coupon_dict = json.load(f)
-        d_consume_with_coupon_dict_size=int(d_consume_with_coupon_dict["total_size"])
-        train_data5["d_consume_with_coupon"] = train_data5.apply(lambda row: __common_get_value_from_json_dict(d_consume_with_coupon_dict, row["distance"]), axis=1)
-        train_data5["d_consume_with_coupon_ratio"] = train_data5.d_consume_with_coupon.apply(lambda row: int(row) / d_consume_with_coupon_dict_size)
-
-    train_data5.to_csv(out_file, index=None)
+    if data_file=="./feature_data/t2.csv":
+        t2.to_csv("./feature_data/t3.csv", index=None)
+    else:
+        t2.to_csv("./test_data/t3.csv", index=None)
 
 
-def generate_label(in_file="./feature_data/train_data6.csv",out_file="./feature_data/train_data7.csv"):
-    if os.path.exists(out_file):
-        return
-    train_data6 = pd.read_csv(in_file, dtype=str)
+def build_user_feature(data_file="./feature_data/t3.csv"):
+    t3=pd.read_csv(data_file,dtype=str)
+
+    def __s12(t3_origin):
+        if os.path.exists("./json_data/user_consume.json") and os.path.exists("./json_data/user_use_ratio.json"):
+            with open("./json_data/user_consume.json", "r", encoding="utf-8") as f:
+                user_consume_dict = json.load(f)
+            with open("./json_data/user_use_ratio.json", "r", encoding="utf-8") as f:
+                user_use_ratio_dict = json.load(f)
+        else:
+            origin_data = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            consume_data = origin_data[pd.notna(origin_data["Date"])]
+            user_data = consume_data[pd.notna(consume_data["Coupon_id"])]
+            consume_data = consume_data[["User_id"]]
+            consume_data["count"] = 1
+            consume_data_out = consume_data.groupby("User_id").agg("sum").reset_index()
+            user_consume_dict = dict()
+            for i in consume_data_out.values:
+                user_consume_dict[i[0]] = int(i[1])
+            with open("./json_data/user_consume.json", "w", encoding="utf-8") as f:
+                json.dump(user_consume_dict, f, ensure_ascii=False)
+            user_data = user_data[["User_id"]]
+            user_data["count"] = 1
+            user_data_out = user_data.groupby("User_id").agg("sum").reset_index()
+            user_use_ratio_dict = dict()
+            for i in user_data_out.values:
+                user_use_ratio_dict[i[0]] = str(round((int(i[1]) / user_consume_dict[i[0]]), 4))
+            with open("./json_data/user_use_ratio.json", "w", encoding="utf-8") as f:
+                json.dump(user_use_ratio_dict, f, ensure_ascii=False)
+
+        def __get_user_consume(user_id):
+            if user_id in user_consume_dict:
+                return user_consume_dict[user_id]
+            return "0"
+
+        def __get_user_use_ratio(user_id):
+            if user_id in user_use_ratio_dict:
+                return user_use_ratio_dict[user_id]
+            return "0"
+
+        t3_origin["user_consume"] = t3_origin.apply(lambda row: __get_user_consume(row["User_id"]), axis=1)
+        t3_origin["user_use_ratio"] = t3_origin.apply(lambda row: __get_user_use_ratio(row["User_id"]), axis=1)
+        return t3_origin
+
+    def __s3(t3_origin):
+        if os.path.exists("./json_data/user_receive_use_ratio.json"):
+            with open("./json_data/user_receive_use_ratio.json", "r", encoding="utf-8") as f:
+                user_receive_use_ratio_dict = json.load(f)
+        else:
+            origin_data = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            receive_data = origin_data[pd.notna(origin_data["Date_received"])]
+            receive_use_data = origin_data[pd.notna(origin_data["Date_received"]) & pd.notna(origin_data["Date"])]
+            receive_data = receive_data[["User_id"]]
+            receive_data["count"] = 1
+            receive_use_data = receive_use_data[["User_id"]]
+            receive_use_data["count"] = 1
+            receive_data_out = receive_data.groupby("User_id").agg("sum").reset_index()
+            receive_use_data_out = receive_use_data.groupby("User_id").agg("sum").reset_index()
+            receive_data_dict = dict()
+            for i in receive_data_out.values:
+                receive_data_dict[i[0]] = int(i[1])
+            user_receive_use_ratio_dict = dict()
+            for i in receive_use_data_out.values:
+                user_receive_use_ratio_dict[i[0]] = str(round((receive_data_dict[i[0]] / i[1]), 4))
+            with open("./json_data/user_receive_use_ratio.json", "w", encoding="utf-8") as f:
+                json.dump(user_receive_use_ratio_dict, f, ensure_ascii=False)
+
+        def __get_user_receive_use_ratio(user_id):
+            if user_id in user_receive_use_ratio_dict:
+                return user_receive_use_ratio_dict[user_id]
+            return "0"
+
+        t3_origin["user_receive_use_ratio"] = t3_origin.apply(lambda row: __get_user_receive_use_ratio(row["User_id"]), axis=1)
+        return t3_origin
+
+    def __s45(t3_origin):
+        if os.path.exists("./json_data/user_merchant_consume_total.json") and os.path.exists("./json_data/user_merchant_use_ratio.json"):
+            with open("./json_data/user_merchant_consume_total.json", "r", encoding="utf-8") as f:
+                user_merchant_consume_total_dict = json.load(f)
+            with open("./json_data/user_merchant_use_ratio.json", "r", encoding="utf-8") as f:
+                user_merchant_use_ratio_dict = json.load(f)
+        else:
+            origin_data = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            consume_data = origin_data[pd.notna(origin_data["Date"])]
+            use_data=origin_data[pd.notna(origin_data["Date"])&pd.notna(origin_data["Coupon_id"])]
+            use_data=use_data[["User_id", "Merchant_id"]]
+            consume_data = consume_data[["User_id", "Merchant_id"]]
+            consume_data["count"] = 1
+            use_data["count"] = 1
+            consume_data_out = consume_data.groupby(["User_id", "Merchant_id"]).agg("sum").reset_index()
+            use_data_out=use_data.groupby(["User_id", "Merchant_id"]).agg("sum").reset_index()
+            user_merchant_consume_total_dict = dict()
+            user_merchant_use_ratio_dict=dict()
+            for i in consume_data_out.values:
+                user_merchant_consume_total_dict["{}_{}".format(i[0], i[1])] = i[2]
+            with open("./json_data/user_merchant_consume_total.json", "w", encoding="utf-8") as f:
+                json.dump(user_merchant_consume_total_dict, f, ensure_ascii=False)
+            for i in use_data_out.values:
+                k="{}_{}".format(i[0], i[1])
+                user_merchant_use_ratio_dict[k]=str(round((i[2]/user_merchant_consume_total_dict[k]),4))
+            with open("./json_data/user_merchant_use_ratio.json", "w", encoding="utf-8") as f:
+                json.dump(user_merchant_use_ratio_dict, f, ensure_ascii=False)
+
+        def __get_user_merchant_consume_total(user_id, merchant_id):
+            k="{}_{}".format(user_id, merchant_id)
+            if k in user_merchant_consume_total_dict:
+                return str(user_merchant_consume_total_dict[k])
+            return "0"
+
+        def __get_user_merchant_use_ratio(user_id, merchant_id):
+            k = "{}_{}".format(user_id, merchant_id)
+            if k in user_merchant_consume_total_dict:
+                return str(round((int(user_merchant_consume_total_dict["{}_{}".format(user_id, merchant_id)])/int(user_merchant_consume_total_dict[k])),4))
+            return "0"
+
+        t3_origin["user_merchant_consume_total"] = t3_origin.apply(lambda row: __get_user_merchant_consume_total(row["User_id"], row["Merchant_id"]), axis=1)
+        t3_origin["user_merchant_use_ratio"] = t3_origin.apply(lambda row: __get_user_merchant_use_ratio(row["User_id"], row["Merchant_id"]), axis=1)
+        return t3_origin
+
+    def __s6(t3_origin):
+        if os.path.exists("./json_data/user_distance_consume_ratio.json"):
+            with open("./json_data/user_distance_consume_ratio.json", "r", encoding="utf-8") as f:
+                user_distance_consume_ratio_dict = json.load(f)
+        else:
+            origin_data = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            consume_data = origin_data[pd.notna(origin_data["Date"])]
+            consume_data = consume_data[["User_id", "Distance"]]
+            consume_data = consume_data.replace(np.nan, "-1")
+            consume_data["count"] = 1
+            consume_data_out = consume_data.groupby(["User_id", "Distance"]).agg("sum").reset_index()
+            user_distance_consume_ratio_dict = dict()
+            for i in consume_data_out.values:
+                user_distance_consume_ratio_dict["{}_{}".format(i[0], i[1])] = str(i[2])
+            with open("./json_data/user_distance_consume_ratio.json", "w", encoding="utf-8") as f:
+                json.dump(user_distance_consume_ratio_dict, f, ensure_ascii=False)
+        with open("./json_data/user_consume.json", "r", encoding="utf-8") as f:
+            user_consume_dict = json.load(f)
+
+        def __get_user_distance_consume_ratio(user_id, distance):
+            k = "{}_{}".format(user_id, distance)
+            if k in user_distance_consume_ratio_dict:
+                return str(round((int(user_distance_consume_ratio_dict[k])/int(user_consume_dict[user_id])),4))
+            return "0"
+
+        t3_origin["user_distance_consume_ratio"] = t3_origin.apply(lambda row: __get_user_distance_consume_ratio(row["User_id"], row["Distance"]), axis=1)
+        return t3_origin
+
+    def __s78(t3_origin):
+        if os.path.exists("./json_data/user_receive_use_gap.json") and os.path.exists("./json_data/user_receive_use_gap_max.json"):
+            with open("./json_data/user_receive_use_gap.json", "r", encoding="utf-8") as f:
+                user_receive_use_gap_dict = json.load(f)
+            with open("./json_data/user_receive_use_gap_max.json", "r", encoding="utf-8") as f:
+                user_receive_use_gap_max_dict = json.load(f)
+        else:
+            origin_data = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            consume_data = origin_data[pd.notna(origin_data["Date"])&pd.notna(origin_data["Date_received"])]
+            def __calc_day_gap(day1, day2):
+                return (date(int(day1[:4]), int(day1[4:6]), int(day1[6:])) - date(int(day2[:4]), int(day2[4:6]),int(day2[6:]))).days
+            consume_data["day_gap"] = consume_data.apply(lambda row: __calc_day_gap(row["Date"], row["Date_received"]), axis=1)
+            consume_data_new=consume_data[["User_id","day_gap"]]
+            consume_data_new_out = consume_data_new.groupby(["User_id"]).agg(["max", "mean"]).reset_index()
+            user_receive_use_gap_dict=dict()
+            user_receive_use_gap_max_dict=dict()
+            for i in consume_data_new_out.values:
+                user_receive_use_gap_dict[i[0]]=str(round(i[2],4))
+                user_receive_use_gap_max_dict[i[0]] = str(i[1])
+            with open("./json_data/user_receive_use_gap.json", "w", encoding="utf-8") as f:
+                json.dump(user_receive_use_gap_dict,f,ensure_ascii=False)
+            with open("./json_data/user_receive_use_gap_max.json", "w", encoding="utf-8") as f:
+                json.dump(user_receive_use_gap_max_dict, f, ensure_ascii=False)
+
+        def __get_user_receive_use_gap(user_id):
+            if user_id in user_receive_use_gap_dict:
+                return user_receive_use_gap_dict[user_id]
+            return "0"
+
+        def __get_user_receive_use_gap_max(user_id):
+            if user_id in user_receive_use_gap_max_dict:
+                return user_receive_use_gap_max_dict[user_id]
+            return "0"
+
+        t3_origin["user_receive_use_gap"] = t3_origin.apply(lambda row: __get_user_receive_use_gap(row["User_id"]), axis=1)
+        t3_origin["user_receive_use_gap_max"] = t3_origin.apply(lambda row: __get_user_receive_use_gap_max(row["User_id"]), axis=1)
+        return t3_origin
+
+    t3=__s12(t3)
+    t3=__s3(t3)
+    t3=__s45(t3)
+    t3=__s6(t3)
+    t3=__s78(t3)
+    if data_file=="./feature_data/t3.csv":
+        t3.to_csv("./feature_data/t4.csv", index=None)
+    else:
+        t3.to_csv("./test_data/t4.csv", index=None)
+
+
+def build_merchant_feature(data_file="./feature_data/t4.csv"):
+    t4 = pd.read_csv(data_file, dtype=str)
+
+    def __s12(t4_origin):
+        if os.path.exists("./json_data/merchant_consume_total.json") and os.path.exists("./json_data/merchant_use_ratio.json"):
+            with open("./json_data/merchant_consume_total.json", "r", encoding="utf-8") as f:
+                merchant_consume_total_dict = json.load(f)
+            with open("./json_data/merchant_use_ratio.json", "r", encoding="utf-8") as f:
+                merchant_use_ratio_dict = json.load(f)
+        else:
+            origin_data = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            consume_data = origin_data[pd.notna(origin_data["Date"])]
+            consume_data = consume_data[["Merchant_id"]]
+            consume_data["count"] = 1
+            consume_data_out = consume_data.groupby("Merchant_id").agg("sum").reset_index()
+            merchant_consume_total_dict = dict()
+            for i in consume_data_out.values:
+                merchant_consume_total_dict[i[0]] = i[1]
+            with open("./json_data/merchant_consume_total.json", "w", encoding="utf-8") as f:
+                json.dump(merchant_consume_total_dict, f, ensure_ascii=False)
+            use_data=origin_data[pd.notna(origin_data["Date"])&pd.notna(origin_data["Coupon_id"])]
+            use_data=use_data[["Merchant_id"]]
+            use_data["count"] = 1
+            use_data_out = use_data.groupby("Merchant_id").agg("sum").reset_index()
+            merchant_use_ratio_dict=dict()
+            for i in use_data_out.values:
+                merchant_use_ratio_dict[i[0]]=str(round((i[1]/merchant_consume_total_dict[i[0]]),4))
+            with open("./json_data/merchant_use_ratio.json", "w", encoding="utf-8") as f:
+                json.dump(merchant_use_ratio_dict, f, ensure_ascii=False)
+
+        def __get_merchant_consume_total(merchant_id):
+            if merchant_id in merchant_consume_total_dict:
+                return str(merchant_consume_total_dict[merchant_id])
+            return "0"
+        def __get_merchant_use_ratio(merchant_id):
+            if merchant_id in merchant_use_ratio_dict:
+                return str(merchant_use_ratio_dict[merchant_id])
+            return "0"
+
+        t4_origin["merchant_consume_total"] = t4_origin.apply(lambda row: __get_merchant_consume_total(row["Merchant_id"]), axis=1)
+        t4_origin["merchant_use_ratio"] = t4_origin.apply(lambda row: __get_merchant_use_ratio(row["Merchant_id"]), axis=1)
+        return t4_origin
+
+    def __s3(t4_origin):
+        with open("./json_data/merchant_consume_total.json", "r", encoding="utf-8") as f:
+            merchant_consume_total_dict = json.load(f)
+        if os.path.exists("./json_data/merchant_distance_consume_ratio.json"):
+            with open("./json_data/merchant_distance_consume_ratio.json", "r", encoding="utf-8") as f:
+                merchant_distance_consume_ratio_dict = json.load(f)
+        else:
+            origin_data = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            consume_data = origin_data[pd.notna(origin_data["Date"])]
+            consume_data = consume_data[["Merchant_id","Distance"]]
+            consume_data["count"] = 1
+            consume_data_out = consume_data.groupby(["Merchant_id","Distance"]).agg("sum").reset_index()
+            merchant_distance_consume_ratio_dict = dict()
+            for i in consume_data_out.values:
+                merchant_distance_consume_ratio_dict["{}_{}".format(i[0],i[1])]=str(round((i[2]/int(merchant_consume_total_dict[i[0]])),4))
+            with open("./json_data/merchant_distance_consume_ratio.json", "w", encoding="utf-8") as f:
+                json.dump(merchant_distance_consume_ratio_dict, f, ensure_ascii=False)
+
+        def __get_merchant_distance_consume_ratio(merchant_id, distance):
+            k = "{}_{}".format(merchant_id, distance)
+            if k in merchant_distance_consume_ratio_dict:
+                return merchant_distance_consume_ratio_dict[k]
+            return "0"
+
+        t4_origin["merchant_distance_consume_ratio"] = t4_origin.apply(lambda row: __get_merchant_distance_consume_ratio(row["Merchant_id"], row["Distance"]), axis=1)
+        return t4_origin
+
+    def __s4(t4_origin):
+        if os.path.exists("./json_data/merchant_week_consume_ratio.json"):
+            with open("./json_data/merchant_week_consume_ratio.json", "r", encoding="utf-8") as f:
+                merchant_week_consume_ratio_dict = json.load(f)
+        else:
+            with open("./json_data/merchant_consume_total.json", "r", encoding="utf-8") as f:
+                merchant_consume_total_dict = json.load(f)
+            t2=pd.read_csv("./feature_data/t2.csv",dtype=str)
+            t2=t2[pd.notna(t2["Date"])]
+            t2=t2[["Merchant_id","week_day"]]
+            t2["count"]=1
+            t2_out=t2.groupby(["Merchant_id","week_day"]).agg("sum").reset_index()
+            merchant_week_consume_ratio_dict=dict()
+            for i in t2_out.values:
+                merchant_week_consume_ratio_dict["{}_{}".format(i[0],i[1])]=str(round((i[2]/int(merchant_consume_total_dict[i[0]])),4))
+            with open("./json_data/merchant_week_consume_ratio.json", "w", encoding="utf-8") as f:
+                json.dump(merchant_week_consume_ratio_dict, f, ensure_ascii=False)
+
+        def __get_merchant_week_consume_ratio(merchant_id, week_day):
+            k = "{}_{}".format(merchant_id, week_day)
+            if k in merchant_week_consume_ratio_dict:
+                return merchant_week_consume_ratio_dict[k]
+            return "0"
+
+        t4_origin["merchant_week_consume_ratio"] = t4_origin.apply(lambda row: __get_merchant_week_consume_ratio(row["Merchant_id"], row["week_day"]), axis=1)
+        return t4_origin
+
+    def __s5(t4_origin):
+        if os.path.exists("./json_data/merchant_month_consume_ratio.json"):
+            with open("./json_data/merchant_month_consume_ratio.json", "r", encoding="utf-8") as f:
+                merchant_month_consume_ratio_dict = json.load(f)
+        else:
+            with open("./json_data/merchant_consume_total.json", "r", encoding="utf-8") as f:
+                merchant_consume_total_dict = json.load(f)
+            t2=pd.read_csv("./feature_data/t2.csv",dtype=str)
+            t2=t2[pd.notna(t2["Date"])]
+            t2=t2[["Merchant_id","month_day"]]
+            t2["count"]=1
+            t2_out=t2.groupby(["Merchant_id","month_day"]).agg("sum").reset_index()
+            merchant_month_consume_ratio_dict=dict()
+            for i in t2_out.values:
+                merchant_month_consume_ratio_dict["{}_{}".format(i[0],i[1])]=str(round((i[2]/int(merchant_consume_total_dict[i[0]])),4))
+            with open("./json_data/merchant_month_consume_ratio.json", "w", encoding="utf-8") as f:
+                json.dump(merchant_month_consume_ratio_dict, f, ensure_ascii=False)
+
+        def __get_merchant_month_consume_ratio(merchant_id, month_day):
+            k = "{}_{}".format(merchant_id, month_day)
+            if k in merchant_month_consume_ratio_dict:
+                return merchant_month_consume_ratio_dict[k]
+            return "0"
+
+        t4_origin["merchant_month_consume_ratio"] = t4_origin.apply(lambda row: __get_merchant_month_consume_ratio(row["Merchant_id"], row["month_day"]), axis=1)
+        return t4_origin
+
+    def __s6(t4_origin):
+        if os.path.exists("./json_data/merchant_coupon_type_count.json"):
+            with open("./json_data/merchant_coupon_type_count.json", "r", encoding="utf-8") as f:
+                merchant_coupon_type_count_dict = json.load(f)
+        else:
+            origin_data = pd.read_csv("../data/ccf_offline_stage1_train.csv", dtype=str)
+            data = origin_data[pd.notna(origin_data["Coupon_id"])]
+            data = data[["Merchant_id", "Coupon_id"]]
+            data.drop_duplicates(inplace=True)
+            data["count"] = 1
+            data_out = data.groupby(["Merchant_id"]).agg("sum").reset_index()
+            merchant_coupon_type_count_dict=dict()
+            for i in data_out.values:
+                merchant_coupon_type_count_dict[i[0]]=str(i[1])
+            with open("./json_data/merchant_coupon_type_count.json", "w", encoding="utf-8") as f:
+                json.dump(merchant_coupon_type_count_dict, f, ensure_ascii=False)
+
+        def __get_merchant_coupon_type_count(merchant_id):
+            if merchant_id in merchant_coupon_type_count_dict:
+                return merchant_coupon_type_count_dict[merchant_id]
+            return "0"
+
+        t4_origin["merchant_coupon_type_count"] = t4_origin.apply(lambda row: __get_merchant_coupon_type_count(row["Merchant_id"]), axis=1)
+        return t4_origin
+
+
+    t4=__s12(t4)
+    t4=__s3(t4)
+    # t4 = __s4(t4)
+    # t4 = __s5(t4)
+    t4 = __s6(t4)
+    if data_file=="./feature_data/t4.csv":
+        t4.to_csv("./feature_data/t5.csv", index=None)
+    else:
+        t4.to_csv("./test_data/t5.csv", index=None)
+
+
+
+
+def generate_label(data_file="./feature_data/t5.csv"):
+    t6 = pd.read_csv(data_file, dtype=str)
+
+    def __check_user_action_dict_json_file():
+        if not os.path.exists("./json_data/user_action_dict.json"):
+            off_train = pd.read_csv('../data/ccf_offline_stage1_train.csv', dtype=str)
+            use_data = off_train[pd.notna(off_train.Date)]
+
+            user_action_dict = dict()
+            for i in use_data.values:
+                k = "{}_{}".format(i[0], i[1])
+                if k not in user_action_dict:
+                    user_action_dict[k] = []
+                user_action_dict[k].append("{}_{}_{}_{}_{}".format(i[2], i[3], i[4], i[5], i[6]))
+
+            with open("./json_data/user_action_dict.json", "w", encoding="utf-8") as f:
+                json.dump(user_action_dict, f, ensure_ascii=False)
 
     __check_user_action_dict_json_file()
     with open("./json_data/user_action_dict.json", "r", encoding="utf-8") as f:
@@ -670,7 +622,8 @@ def generate_label(in_file="./feature_data/train_data6.csv",out_file="./feature_
         day1,day2=str(day1),str(day2)
         return (date(int(day1[:4]), int(day1[4:6]), int(day1[6:]))-date(int(day2[:4]), int(day2[4:6]), int(day2[6:]))).days
 
-    def _get_label(date_received,u_m_k):
+    def _get_label(date_received,user_id,merchant_id):
+        u_m_k="{}_{}".format(user_id,merchant_id)
         if u_m_k not in user_action_dict:
             return -1
         vs=user_action_dict[u_m_k]
@@ -686,45 +639,23 @@ def generate_label(in_file="./feature_data/train_data6.csv",out_file="./feature_
                     return 0
         return -1
 
-    train_data6 = train_data6[pd.notna(train_data6.date_received)]
-    train_data6["label"] = train_data6.apply(lambda row: _get_label(row['date_received'], row['u_m_k']), axis=1)
-
-    train_data6.to_csv(out_file, index=None)
-
+    train_data6 = t6[pd.notna(t6.Date_received)]
+    train_data6["label"] = train_data6.apply(lambda row: _get_label(row['Date_received'], row['User_id'] ,row['Merchant_id']), axis=1)
+    train_data6.to_csv("./feature_data/t6.csv", index=None)
 
 
-"""
-生成训练数据和验证数据
-"""
-def convert_train_data():
-    generate_discount_rate_feature()
-    generate_date_received_feature()
-    generate_user_id_feature()
-    generate_merchant_id_feature()
-    generate_coupon_id_feature()
-    generate_distance_feature()
-    generate_label()
 
-"""
-生成测试数据
-"""
-def convert_test_data():
-    generate_discount_rate_feature(in_file="../data/ccf_offline_stage1_test_revised.csv",out_file="./test_data/test_data1.csv")
-    generate_date_received_feature(in_file="./test_data/test_data1.csv",out_file="./test_data/test_data2.csv",temp_file="./test_data/test_data2_temp.csv")
-    generate_user_id_feature(in_file="./test_data/test_data2.csv",out_file="./test_data/test_data3.csv")
-    generate_merchant_id_feature(in_file="./test_data/test_data3.csv",out_file="./test_data/test_data4.csv")
-    generate_coupon_id_feature(in_file="./test_data/test_data4.csv",out_file="./test_data/test_data5.csv")
-    generate_distance_feature(in_file="./test_data/test_data5.csv",out_file="./test_data/test_data6.csv")
+# build_discount_feature()
+# build_date_received_feature()
+# build_distance_feature()
+# build_user_feature()
+build_merchant_feature()
+generate_label()
 
 
-convert_train_data()
-convert_test_data()
 
-
-# train_data=pd.read_csv("./feature_data/train_data7.csv",dtype=str)
-# zheng=train_data[train_data["label"]=="1"]
-# zhong=train_data[train_data["label"]=="0"]
-# fu=train_data[train_data["label"]=="-1"]
-#
-# out=pd.concat([zheng.sample(n=10000),zhong.sample(n=1000),fu.sample(n=1000)],axis=0)
-# out.to_csv("./feature_data/train_data8.csv", index=None)
+# build_discount_feature(data_file="../data/ccf_offline_stage1_test_revised.csv")
+# build_date_received_feature(data_file="./test_data/t1.csv")
+# build_distance_feature(data_file="./test_data/t2.csv")
+# build_user_feature(data_file="./test_data/t3.csv")
+build_merchant_feature(data_file="./test_data/t4.csv")
